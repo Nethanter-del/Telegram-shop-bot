@@ -130,6 +130,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
+Telegram-shop-bot/
 env/
 venv/
 ENV/
