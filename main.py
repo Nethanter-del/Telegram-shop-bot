@@ -35,7 +35,7 @@ async def main():
     db_instance = bd(host=config["PG_HOST"],user=config["PG_USER"],password=config["PG_PASSWORD"],database=config["PG_DATABASE"],owner=config["OWNER_ID"])
     await db_instance.init_db()
     
-    await client.main()
+    
     await dp.start_polling(bot)
     
 if __name__ == "__main__":
