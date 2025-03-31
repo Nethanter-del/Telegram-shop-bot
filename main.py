@@ -37,7 +37,7 @@ from modules.payment import Payment
 from modules.keyboards import keyboards
 async def main():
     logging.basicConfig(level=logging.INFO) 
-    config =  dotenv_values("config.env") 
+    config =  dotenv_values(".env") 
     bot = Bot(token=config["TG_TOKEN"]) 
     dp = Dispatcher()
     bot.edit_message_reply_markup
@@ -54,10 +54,66 @@ async def main():
         
         await message.answer(text="Добро пожаловать в Sasi_market:", reply_markup=await keyboards.main_kb())
     
-            
+    
+    async def _category(callback_query):
+        category = callback_query.data.split("_")
+        await callback_query.message.edit_text(text=category[1])
+        products = await db_instance.get_products_by_category(category[1])
+        await callback_query.message.edit_reply_markup(reply_markup=await keyboards.category_kb(products))
+        
+    async def _product(callback_query):
+        product = callback_query.data.split("_")
+        detailsr = await db_instance.get_product_by_id(product[1])
+        details = detailsr[0]
+        await callback_query.message.edit_text(text=f"Товар: {details["product_name"]} описание: {details["product_description"]}, цена {details["price"]}")
+        await callback_query.message.edit_reply_markup(reply_markup=await keyboards.product_kb(product))
+        
+    async def _buy(callback_query):
+        product = callback_query.data.split("_")
+        user = await db_instance.get_user(callback_query.from_user.id)
+        detailsr = await db_instance.get_product_by_id(product[1])
+        details = detailsr[0]
+        if user[0]["balance"] >= details["price"]:
+            await callback_query.message.edit_text(text=f"Покупка Товар: {details["product_name"]} за {details["price"]} ваш баланс: {user[0]["balance"]}")
+        else: 
+            await callback_query.message.edit_text(text=f"Покупка Товар: {details["product_name"]} за {details["price"]} ваш баланс: на вашем балансе недостаточно средств!")
+        await callback_query.message.edit_reply_markup(reply_markup=await keyboards.buy_kb(user, details, product))
+    async def _finishbuy(callback_query):
+        product = callback_query.data.split("_")
+        user = await db_instance.get_user(callback_query.from_user.id)
+        detailsr = await db_instance.get_product_by_id(product[1])
+        details = detailsr[0]
+        await db_instance.update_balance(callback_query.from_user.id, balance=int(user[0]["balance"]-details["price"]))
+        await callback_query.message.edit_text(text=f"Успешная покупка: {details["product_name"]} за {details["price"]} ваш баланс: {int(user[0]["balance"]-details["price"])}, данные: {details["product"]}")
+    async def _deposit(callback_query):
+        product = callback_query.data.split("_")
+        user = await db_instance.get_user(callback_query.from_user.id)
+        detailsr = await db_instance.get_product_by_id(product[1])
+        details = detailsr[0]
+        amount = int(details["price"]-user[0]["balance"])
+        invoice = await pay.create_invoice(amount=amount, fiat='RUB')
+        await callback_query.message.edit_text(text=f"Пополнение баланса платеж #{invoice[0]} статус: {invoice[1]} сумма: {invoice[2]}")
+        await callback_query.message.edit_reply_markup(reply_markup=await keyboards.deposit_kb(invoice, detailsr))
+    async def _checkpayment(callback_query):
+        invoiceid = callback_query.data.split("_")
+        invoice = await pay.check_status(invoiceid[1])
+        if invoice[0].status == "active":
+            pass
+        elif invoice[0].status == "paid":
+            await callback_query.message.edit_text(text=f"Баланс пополнен платеж #{invoice[0].invoice_id} статус: {invoice[0].status} сумма: {invoice[0].amount}")
+            await db_instance.update_balance(callback_query.from_user.id, balance=int(invoice[0].amount))
+            await callback_query.message.edit_reply_markup(reply_markup=await keyboards.check_payment_kb(invoiceid))
+    async def _cancelpayment(callback_query):
+        invoiceid = callback_query.data.split("_")
+        invoice = await pay.check_status(invoiceid[1])
+        if invoice[0].status == "active":
+            await pay.del_invoice(invoiceid[1])
+            await callback_query.message.edit_text(text=f"Пополнение отменено платеж #{invoice[0].invoice_id} статус: cancel сумма: {invoice[0].amount}")
+    async def _back(callback_query):
+        await callback_query.message.delete()
+        await start(callback_query.message)
     @dp.message(F.text == "Каталог 📦")
     async def catalog(message: types.Message):
-        await message.answer(text="Каталог")
         products = await db_instance.get_products()
         categories = await Constructs.format_products1(products)
         await message.answer(text="Каталог", reply_markup=await keyboards.catalog_kb(categories))
@@ -78,67 +134,29 @@ async def main():
                 pass
             
             elif callback_query.data.startswith("category"):
-                category = callback_query.data.split("_")
-                await callback_query.message.edit_text(text=category[1])
-                products = await db_instance.get_products_by_category(category[1])
-                await callback_query.message.edit_reply_markup(reply_markup=await keyboards.category_kb(products))
+                await _category(callback_query)
                 
             elif callback_query.data.startswith("product"):
-                product = callback_query.data.split("_")
-                detailsr = await db_instance.get_product_by_id(product[1])
-                details = detailsr[0]
-                await callback_query.message.edit_text(text=f"Товар: {details["product_name"]} описание: {details["product_description"]}, цена {details["price"]}")
-                await callback_query.message.edit_reply_markup(reply_markup=await keyboards.product_kb(product))
+                await _product(callback_query)
                 
             elif callback_query.data.startswith("buy"): 
-                product = callback_query.data.split("_")
-                user = await db_instance.get_user(callback_query.from_user.id)
-                detailsr = await db_instance.get_product_by_id(product[1])
-                details = detailsr[0]
-                if user[0]["balance"] >= details["price"]:
-                    await callback_query.message.edit_text(text=f"Покупка Товар: {details["product_name"]} за {details["price"]} ваш баланс: {user[0]["balance"]}")
-                else: 
-                    await callback_query.message.edit_text(text=f"Покупка Товар: {details["product_name"]} за {details["price"]} ваш баланс: на вашем балансе недостаточно средств!")
-                await callback_query.message.edit_reply_markup(reply_markup=await keyboards.buy_kb(user, details, product))
+                await _buy(callback_query)
                 
             elif callback_query.data.startswith("finishbuy"): 
-                product = callback_query.data.split("_")
-                user = await db_instance.get_user(callback_query.from_user.id)
-                detailsr = await db_instance.get_product_by_id(product[1])
-                details = detailsr[0]
-                await db_instance.update_balance(callback_query.from_user.id, balance=int(user[0]["balance"]-details["price"]))
-                await callback_query.message.edit_text(text=f"Успешная покупка: {details["product_name"]} за {details["price"]} ваш баланс: {int(user[0]["balance"]-details["price"])}, данные: {details["product"]}")
+                await _finishbuy(callback_query)
             
             elif callback_query.data.startswith("deposit"):
-                product = callback_query.data.split("_")
-                user = await db_instance.get_user(callback_query.from_user.id)
-                detailsr = await db_instance.get_product_by_id(product[1])
-                details = detailsr[0]
-                amount = int(details["price"]-user[0]["balance"])
-                invoice = await pay.create_invoice(amount=amount, fiat='RUB')
-                await callback_query.message.edit_text(text=f"Пополнение баланса платеж #{invoice[0]} статус: {invoice[1]} сумма: {invoice[2]}")
-                await callback_query.message.edit_reply_markup(reply_markup=await keyboards.deposit_kb(invoice, detailsr))
+                await _deposit(callback_query)
             
             elif callback_query.data.startswith("checkpayment"):
-                invoiceid = callback_query.data.split("_")
-                invoice = await pay.check_status(invoiceid[1])
-                if invoice[0].status == "active":
-                    pass
-                elif invoice[0].status == "paid":
-                    await callback_query.message.edit_text(text=f"Баланс пополнен платеж #{invoice[0].invoice_id} статус: {invoice[0].status} сумма: {invoice[0].amount}")
-                    await db_instance.update_balance(callback_query.from_user.id, balance=int(invoice[0].amount))
-                    await callback_query.message.edit_reply_markup(reply_markup=await keyboards.check_payment_kb(invoiceid))
+                await _checkpayment(callback_query)
                     
             elif callback_query.data.startswith("cancelpayment"):
-                invoiceid = callback_query.data.split("_")
-                invoice = await pay.check_status(invoiceid[1])
-                if invoice[0].status == "active":
-                    await pay.del_invoice(invoiceid[1])
-                    await callback_query.message.edit_text(text=f"Пополнение отменено платеж #{invoice[0].invoice_id} статус: cancel сумма: {invoice[0].amount}")
+                await _cancelpayment(callback_query)
+                
             elif callback_query.data == "back":
-                await callback_query.message.delete()
-                await start(callback_query.message)
-                pass
+                await _back(callback_query)
+           
 
     
     
