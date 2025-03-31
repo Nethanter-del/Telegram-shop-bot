@@ -31,9 +31,11 @@ class bd:
         tables = '''CREATE TABLE IF NOT EXISTS public.products
 (
     product_id SERIAL NOT NULL,
-    text COLLATE pg_catalog."default" NOT NULL,
-    product text COLLATE pg_catalog."default",
+    category text COLLATE pg_catalog."default",
+    product_name text COLLATE pg_catalog."default" NOT NULL,
+    product_description text COLLATE pg_catalog."default",
     price bigint NOT NULL,
+    product text COLLATE pg_catalog."default",
     CONSTRAINT products_pkey PRIMARY KEY (product_id)
 )
 
@@ -47,6 +49,7 @@ CREATE TABLE IF NOT EXISTS public.users
     is_admin boolean NOT NULL,
     state text COLLATE pg_catalog."default",
     balance bigint,
+    purchase bigint,
     CONSTRAINT users_pkey PRIMARY KEY (id)
 )
 
@@ -60,7 +63,7 @@ TABLESPACE pg_default;'''
         is_admin = False
         if str(user_id) == str(self.owner):
             is_admin = True
-        await self.conn.execute("INSERT INTO users (user_id, username, is_admin) VALUES ($1, $2, $3)", user_id, username, is_admin)
+        await self.conn.execute("INSERT INTO users (user_id, username, is_admin, balance) VALUES ($1, $2, $3, $4)", user_id, username, is_admin, 0)
     # fetch user info   
     async def get_user(self, user_id):
         values = await self.conn.fetch(f"SELECT * FROM users WHERE user_id = {user_id}")
@@ -84,4 +87,14 @@ TABLESPACE pg_default;'''
     # set user state polling|waiting|free
     async def set_state(self, user_id, state):
         await self.conn.execute("UPDATE users SET state = $1 WHERE user_id = $2", state, user_id)
-    
+    async def update_balance(self, user_id, balance): 
+        await self.conn.execute("UPDATE users SET balance = $1 WHERE user_id = $2", balance, user_id)
+    async def get_products(self):
+        values = await self.conn.fetch(f"SELECT * FROM products")
+        return await self.format_response(values)
+    async def get_products_by_category(self, category):
+        values = await self.conn.fetch(f"SELECT * FROM products WHERE category = $1", (category))
+        return await self.format_response(values)
+    async def get_product_by_id(self, id):
+        values = await self.conn.fetch(f"SELECT * FROM products WHERE product_id = $1", (int(id)))
+        return await self.format_response(values)
