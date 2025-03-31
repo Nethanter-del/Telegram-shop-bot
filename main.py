@@ -31,9 +31,10 @@ from aiogram import types
 from aiogram.filters.command import Command
 from aiogram import F
 from aiogram.enums import ParseMode
-from aiogram.utils.keyboard import InlineKeyboardBuilder, InlineKeyboardButton, KeyboardBuilder, ReplyKeyboardBuilder
+
 from modules.constructs import Constructs
 from modules.payment import Payment
+from modules.keyboards import keyboards
 async def main():
     logging.basicConfig(level=logging.INFO) 
     config =  dotenv_values("config.env") 
@@ -50,13 +51,8 @@ async def main():
         user = await db_instance.get_user(message.from_user.id)
         if len(user) < 1:
             await db_instance.create_user(message.from_user.id, message.from_user.username)
-        builder = ReplyKeyboardBuilder()
-        button_catalog = types.KeyboardButton(text="Каталог 📦")
-        button_list = types.KeyboardButton(text="Наличие ✅")
-        button_profile = types.KeyboardButton(text="Мой профиль 👤")
-        button_faq = types.KeyboardButton(text="FAQ ❓")
-        builder.add(button_catalog, button_list, button_profile, button_faq)
-        await message.answer(text="Добро пожаловать в Sasi_market:", reply_markup=builder.as_markup(resize_keyboard=True))
+        
+        await message.answer(text="Добро пожаловать в Sasi_market:", reply_markup=await keyboards.main_kb())
     
             
     @dp.message(F.text == "Каталог 📦")
@@ -64,11 +60,7 @@ async def main():
         await message.answer(text="Каталог")
         products = await db_instance.get_products()
         categories = await Constructs.format_products1(products)
-        builder = InlineKeyboardBuilder()
-        for category in categories:
-            button = InlineKeyboardButton(text = category, callback_data = f"category_{category}")
-            builder.add(button)
-        await message.answer(text="Каталог", reply_markup=builder.as_markup())
+        await message.answer(text="Каталог", reply_markup=await keyboards.catalog_kb(categories))
     @dp.message(F.text == "Наличие ✅")
     async def list_goods(message: types.Message):
         products = await db_instance.get_products()
@@ -82,45 +74,33 @@ async def main():
         await message.answer(text="FAQ")
     @dp.callback_query()    
     async def process_callback(callback_query: types.CallbackQuery):
-            if callback_query.data == "create_ticket":
+            if callback_query.data == "*":
                 pass
+            
             elif callback_query.data.startswith("category"):
                 category = callback_query.data.split("_")
                 await callback_query.message.edit_text(text=category[1])
-                builder = InlineKeyboardBuilder()
                 products = await db_instance.get_products_by_category(category[1])
-                for item in products:
-                    button = InlineKeyboardButton(text = item["product_name"], callback_data = f"product_{item["product_id"]}")
-                    builder.row(button)
-                await callback_query.message.edit_reply_markup(reply_markup=builder.as_markup())
+                await callback_query.message.edit_reply_markup(reply_markup=await keyboards.category_kb(products))
+                
             elif callback_query.data.startswith("product"):
                 product = callback_query.data.split("_")
                 detailsr = await db_instance.get_product_by_id(product[1])
                 details = detailsr[0]
                 await callback_query.message.edit_text(text=f"Товар: {details["product_name"]} описание: {details["product_description"]}, цена {details["price"]}")
-                builder = InlineKeyboardBuilder()
-                button_buy = InlineKeyboardButton(text = "Купить", callback_data = f"buy_{product[1]}")
-                button_cancel = InlineKeyboardButton(text = "Отмена", callback_data = f"back")
-                builder.add(button_buy, button_cancel)
-                await callback_query.message.edit_reply_markup(reply_markup=builder.as_markup())
+                await callback_query.message.edit_reply_markup(reply_markup=await keyboards.product_kb(product))
+                
             elif callback_query.data.startswith("buy"): 
                 product = callback_query.data.split("_")
                 user = await db_instance.get_user(callback_query.from_user.id)
                 detailsr = await db_instance.get_product_by_id(product[1])
                 details = detailsr[0]
-                builder = InlineKeyboardBuilder()
                 if user[0]["balance"] >= details["price"]:
                     await callback_query.message.edit_text(text=f"Покупка Товар: {details["product_name"]} за {details["price"]} ваш баланс: {user[0]["balance"]}")
-                    button_finishbuy = InlineKeyboardButton(text = "Потдвердить покупку", callback_data = f"finishbuy_{product[1]}")
-                    button_cancel = InlineKeyboardButton(text = "Отмена", callback_data = f"back")
-                    builder.add(button_finishbuy, button_cancel)
-                    
                 else: 
                     await callback_query.message.edit_text(text=f"Покупка Товар: {details["product_name"]} за {details["price"]} ваш баланс: на вашем балансе недостаточно средств!")
-                    button_deposit = InlineKeyboardButton(text = "Пополнить баланс", callback_data = f"deposit_{product[1]}")
-                    button_cancel = InlineKeyboardButton(text = "Отмена", callback_data = f"back")
-                    builder.add(button_deposit, button_cancel)
-                await callback_query.message.edit_reply_markup(reply_markup=builder.as_markup())
+                await callback_query.message.edit_reply_markup(reply_markup=await keyboards.buy_kb(user, details, product))
+                
             elif callback_query.data.startswith("finishbuy"): 
                 product = callback_query.data.split("_")
                 user = await db_instance.get_user(callback_query.from_user.id)
@@ -128,6 +108,7 @@ async def main():
                 details = detailsr[0]
                 await db_instance.update_balance(callback_query.from_user.id, balance=int(user[0]["balance"]-details["price"]))
                 await callback_query.message.edit_text(text=f"Успешная покупка: {details["product_name"]} за {details["price"]} ваш баланс: {int(user[0]["balance"]-details["price"])}, данные: {details["product"]}")
+            
             elif callback_query.data.startswith("deposit"):
                 product = callback_query.data.split("_")
                 user = await db_instance.get_user(callback_query.from_user.id)
@@ -136,12 +117,8 @@ async def main():
                 amount = int(details["price"]-user[0]["balance"])
                 invoice = await pay.create_invoice(amount=amount, fiat='RUB')
                 await callback_query.message.edit_text(text=f"Пополнение баланса платеж #{invoice[0]} статус: {invoice[1]} сумма: {invoice[2]}")
-                builder = InlineKeyboardBuilder()
-                buttonpay = InlineKeyboardButton(text ='Оплатить', url=invoice[3])
-                button_checkpay = InlineKeyboardButton(text ='Я оплатил', callback_data=f"checkpayment_{invoice[0]}_{detailsr[0]["product_id"]}")
-                button_cancelpay = InlineKeyboardButton(text ='Отмена', callback_data=f"cancelpayment_{invoice[0]}")
-                builder.add(buttonpay, button_checkpay, button_cancelpay)
-                await callback_query.message.edit_reply_markup(reply_markup=builder.as_markup())
+                await callback_query.message.edit_reply_markup(reply_markup=await keyboards.deposit_kb(invoice, detailsr))
+            
             elif callback_query.data.startswith("checkpayment"):
                 invoiceid = callback_query.data.split("_")
                 invoice = await pay.check_status(invoiceid[1])
@@ -150,10 +127,8 @@ async def main():
                 elif invoice[0].status == "paid":
                     await callback_query.message.edit_text(text=f"Баланс пополнен платеж #{invoice[0].invoice_id} статус: {invoice[0].status} сумма: {invoice[0].amount}")
                     await db_instance.update_balance(callback_query.from_user.id, balance=int(invoice[0].amount))
-                    builder = InlineKeyboardBuilder()
-                    button_backToProd = InlineKeyboardButton(text ='Вернуться к покупке', callback_data=f"buy_{invoiceid[2]}")
-                    builder.add(button_backToProd)
-                    await callback_query.message.edit_reply_markup(reply_markup=builder.as_markup())
+                    await callback_query.message.edit_reply_markup(reply_markup=await keyboards.check_payment_kb(invoiceid))
+                    
             elif callback_query.data.startswith("cancelpayment"):
                 invoiceid = callback_query.data.split("_")
                 invoice = await pay.check_status(invoiceid[1])
@@ -161,6 +136,8 @@ async def main():
                     await pay.del_invoice(invoiceid[1])
                     await callback_query.message.edit_text(text=f"Пополнение отменено платеж #{invoice[0].invoice_id} статус: cancel сумма: {invoice[0].amount}")
             elif callback_query.data == "back":
+                await callback_query.message.delete()
+                await start(callback_query.message)
                 pass
 
     
