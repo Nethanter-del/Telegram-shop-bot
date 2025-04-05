@@ -80,6 +80,14 @@ TABLESPACE pg_default;'''
     async def select_admins(self):
         values = await self.conn.fetch(f"SELECT user_id FROM users WHERE is_admin = True")
         return await self.format_response(values)
+    async def admin_grant(self, user_id):
+        await self.conn.execute('UPDATE users SET is_admin = True WHERE user_id = $1', int(user_id))
+
+    async def admin_ungrant(self, user_id):
+        await self.conn.execute('UPDATE users SET is_admin = False WHERE user_id = $1', int(user_id))
+    async def add_balance(self, user_id, balance):
+        await self.conn.execute('UPDATE users SET balance = balance + $1 WHERE user_id = $2', balance, user_id)
+        
     # get user state polling|waiting|free
     async def get_state(self, user_id):
         values = await self.conn.fetch(f"SELECT state FROM users WHERE user_id = {user_id}")
