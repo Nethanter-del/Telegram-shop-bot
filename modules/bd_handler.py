@@ -99,6 +99,6 @@ TABLESPACE pg_default;'''
         values = await self.conn.fetch(f"SELECT * FROM products WHERE product_id = $1", (int(id)))
         return await self.format_response(values)
     async def del_product(self, id):
-        await self.conn.execute("DELETE * FROM products WHERE product_id = $1", (int(id)))
+        await self.conn.execute("DELETE FROM products WHERE product_id = $1", (int(id)))
     async def add_product(self, category, name, description, price, product):
         await self.conn.execute("INSERT INTO products (category, product_name, product_description, price, product) VALUES ($1, $2, $3, $4, $5)", category, name, description, int(price), product)
