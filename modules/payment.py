@@ -3,7 +3,7 @@ from aiocryptopay import AioCryptoPay, Networks
 
 class Payment:
     def __init__(self, token):
-        self.crypto = AioCryptoPay(token=token, network=Networks.TEST_NET)
+        self.crypto = AioCryptoPay(token=token, network=Networks.MAIN_NET)
     
     async def get(self):
         profile = await self.crypto.get_me()
