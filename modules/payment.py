@@ -1,3 +1,13 @@
+# -*- coding: utf-8 -*-
+
+# Developer: Nethanter-del
+# Github: https://github.com/Nethanter-del
+# Date Created: 2025-25-03
+# Version: 1.0.0
+
+# License: MIT License
+#
+# Copyright (c) 2025 Nethanter-del
 from aiocryptopay import AioCryptoPay, Networks
 
 

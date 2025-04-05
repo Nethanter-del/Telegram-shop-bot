@@ -1,3 +1,13 @@
+# -*- coding: utf-8 -*-
+
+# Developer: Nethanter-del
+# Github: https://github.com/Nethanter-del
+# Date Created: 2025-12-03
+# Version: 1.0.0
+
+# License: MIT License
+#
+# Copyright (c) 2025 Nethanter-del
 class Constructs:
     async def format_products(products):
         categories = {}

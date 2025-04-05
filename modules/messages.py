@@ -1,3 +1,13 @@
+# -*- coding: utf-8 -*-
+
+# Developer: Nethanter-del
+# Github: https://github.com/Nethanter-del
+# Date Created: 2025-03-04
+# Version: 1.0.0
+
+# License: MIT License
+#
+# Copyright (c) 2025 Nethanter-del
 class _message:
 
     def start_msg():
