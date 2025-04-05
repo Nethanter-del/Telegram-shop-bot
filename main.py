@@ -28,6 +28,7 @@ import logging
 
 from modules.payment import Payment
 from modules.client import client_handlers
+from modules.admin import admin_handlers
 async def main():
     logging.basicConfig(level=logging.INFO) 
     config =  dotenv_values(".env") 
@@ -40,6 +41,8 @@ async def main():
     #######
     client = client_handlers(db_instance, dp, pay)
     await client.main()
+    admin = admin_handlers(dp, db_instance, bot)
+    await admin.main()
     #######
     
     
