@@ -31,7 +31,7 @@ from modules.client import client_handlers
 from modules.admin import admin_handlers
 async def main():
     logging.basicConfig(level=logging.INFO) 
-    config =  dotenv_values(".env") 
+    config =  dotenv_values("config.env") 
     bot = Bot(token=config["TG_TOKEN"]) 
     dp = Dispatcher()
     bot.edit_message_reply_markup
